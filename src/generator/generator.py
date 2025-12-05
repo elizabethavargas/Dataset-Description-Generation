@@ -1,4 +1,3 @@
-!pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git@31b667b54139962832ea2de890383eed14a0a17d"
 import unsloth
 from unsloth import FastLanguageModel
 import torch
@@ -31,11 +30,17 @@ class HFGenerator:
         FastLanguageModel.for_inference(self.model)
 
         if "Qwen" in model_name:
-            self.tokenizer.pad_token = "<|extra_0|>"
-            self.tokenizer.eos_token = "</s>"
-            self.tokenizer.bos_token = "<s>"
+            #self.tokenizer.pad_token = "<|extra_0|>"
+            #self.tokenizer.eos_token = "</s>"
+            #self.tokenizer.bos_token = "<s>"
+            #self.eos_ids = [self.tokenizer.eos_token_id]
 
+            self.tokenizer.eos_token = "<|im_end|>"       # real EOS
+            self.tokenizer.pad_token = "<|endoftext|>"    # real PAD
+            self.tokenizer.bos_token = self.tokenizer.pad_token
             self.eos_ids = [self.tokenizer.eos_token_id]
+            self.pad_id = self.tokenizer.pad_token_id
+            self.bos_id = self.tokenizer.bos_token_id
 
         else:  # LLaMA
             self.eos_ids = [
@@ -70,7 +75,8 @@ class HFGenerator:
                     do_sample=do_sample,
                     temperature=temperature,
                     eos_token_id=self.eos_ids,
-                    pad_token_id=self.tokenizer.pad_token_id,
+                    pad_token_id=self.pad_id,
+                    bos_token_id=self.bos_id,
                     use_cache=True,
                 )
         text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
