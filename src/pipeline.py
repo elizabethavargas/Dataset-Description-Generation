@@ -1,77 +1,70 @@
-description = None
-dataset_sample = None
-title = None
-agency = None
-category = None
-column_definitions = None
-tags = None
+# pipeline.py
 
-
-system_message = f"""You are an assistant for a dataset search engine. Your goal
-is to improve the readability of dataset descriptions for dataset search engine users."""
-
-introduction = f"""Answer the question using the following information.
-
-    First, consider the dataset sample:
-
-    {dataset_sample}"""
-
-initial_description = f"""The initial description is {description}."""
-
-title_agency_cat = f"""Additionally the dataset title is {title}, the agency is {agency} and the category is
-{category} Based on this topic and agency, please add sentence(s) describing what this
-dataset can be used for."""
-
-tag = f"""The tags are {tags}."""
-
-column_defs = f"""Additionally, the column definitions are {column_definitions}."""
-
-closing_instruction = f"""Question: Based on the information above and the
-requirements, provide a dataset description in sentences. Use only natural,
-readable sentences without special formatting."""
-
-# read datasets.pkl
+# Imports
 import pandas as pd
+import pickle
+from generator.generator import HFGenerator  # <-- import your generator class
+
+# Initialize your generators
+qwen_generator = HFGenerator("unsloth/Qwen2-7B-Instruct")
+llama_generator = HFGenerator("unsloth/Meta-Llama-3.1-8B-Instruct")
+
+# Read datasets.pkl
 datasets = pd.read_pickle("../datasets.pkl")
 
 new_descriptions = {}
 
+# Loop through datasets
 for dataset in datasets:
-  dataset_sample = dataset["data_example"]
-  description = dataset['description']
-  title = dataset['dataset_name']
-  agency = dataset['agency']
-  category = dataset['category']
-  column_definitions = dataset["column_info"]
-  tags = dataset['tags']
-  dataset_id = dataset['dataset_id'] 
+    dataset_sample = dataset.get("data_example")
+    description = dataset.get("description")
+    title = dataset.get("dataset_name")
+    agency = dataset.get("agency")
+    category = dataset.get("category")
+    column_definitions = dataset.get("column_info")
+    tags = dataset.get("tags")
+    dataset_id = dataset.get("dataset_id")
 
-  prompt = system_message
-  if dataset_sample is not None:
-    prompt += introduction
-  if description is not None:
-    prompt += initial_description
-  if title is not None:
-    prompt += title_agency_cat
-  if tags is not None:
-    prompt += tag
-  if column_definitions is not None:
-    prompt += column_defs
-  prompt += closing_instruction
+    # Build prompt
+    system_message = f"""You are an assistant for a dataset search engine. Your goal
+is to improve the readability of dataset descriptions for dataset search engine users."""
 
-  qwen_description = qwen_generator.generate_description(prompt)
-  llama_description = llama_generator.generate_description(prompt)
+    introduction = f"""Answer the question using the following information.
 
-  # Initialize the inner dictionary if it doesn't exist
-  if dataset_id not in new_descriptions:
-    new_descriptions[dataset_id] = {}
+First, consider the dataset sample:
 
-  new_descriptions[dataset_id]['qwen_description'] = qwen_description
-  new_descriptions[dataset_id]['llama_description'] = llama_description
+{dataset_sample}""" if dataset_sample is not None else ""
 
+    initial_description = f"""The initial description is {description}.""" if description else ""
 
-import pickle
+    title_agency_cat = f"""Additionally the dataset title is {title}, the agency is {agency} and the category is
+{category}. Based on this topic and agency, please add sentence(s) describing what this
+dataset can be used for.""" if title or agency or category else ""
 
+    tag = f"""The tags are {tags}.""" if tags else ""
+
+    column_defs = f"""Additionally, the column definitions are {column_definitions}.""" if column_definitions else ""
+
+    closing_instruction = """Question: Based on the information above and the
+requirements, provide a dataset description in sentences. Use only natural,
+readable sentences without special formatting."""
+
+    prompt = system_message + "\n" + introduction + "\n" + initial_description + "\n" + \
+             title_agency_cat + "\n" + tag + "\n" + column_defs + "\n" + closing_instruction
+
+    # Generate descriptions
+    qwen_description = qwen_generator.generate_description(prompt)
+    llama_description = llama_generator.generate_description(prompt)
+
+    # Save results
+    new_descriptions[dataset_id] = {
+        'qwen_description': qwen_description,
+        'llama_description': llama_description
+    }
+
+# Save new_descriptions to pickle
 with open('new_descriptions2.pkl', 'wb') as f:
     pickle.dump(new_descriptions, f)
+
+print("Pipeline finished! Saved new_descriptions2.pkl")
 
