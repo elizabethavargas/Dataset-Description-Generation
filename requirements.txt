@@ -1,0 +1,11 @@
+transformers>=4.45.2
+accelerate
+torch
+sentencepiece
+pyyaml
+pandas
+numpy
+tqdm
+jupyter
+unsloth
+
