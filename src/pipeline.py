@@ -10,7 +10,7 @@ qwen_generator = HFGenerator("unsloth/Qwen2-7B-Instruct")
 llama_generator = HFGenerator("unsloth/Meta-Llama-3.1-8B-Instruct")
 
 # Read datasets.pkl
-datasets = pd.read_pickle("../datasets.pkl")
+datasets = pd.read_pickle("Dataset-Description-Generation/datasets.pkl")
 
 new_descriptions = {}
 
