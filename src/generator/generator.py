@@ -52,9 +52,9 @@ class HFGenerator:
         """Generates a description given a prompt and temperature"""
 
         prompt = prompt[:5000]
-	inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
         do_sample = temperature > 0
-    
+
         if "Llama" in self.model_name or "Meta-Llama" in self.model_name:
             with torch.no_grad():
                 outputs = self.model.generate(
