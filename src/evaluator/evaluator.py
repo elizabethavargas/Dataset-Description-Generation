@@ -178,4 +178,3 @@ class OpenAIEvaluator:
           temperature=0.3
           )
         return response.output_text
-
