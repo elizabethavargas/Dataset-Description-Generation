@@ -176,6 +176,11 @@ class HFGenerator:
                     bos_token_id=self.bos_id,
                     use_cache=True,
                 )
-        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
-        return text[len(prompt):].strip()
+        #text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        #return text.strip() #[len(prompt):].strip()
+
+        gen_ids = outputs[0][inputs.input_ids.shape[-1]:]
+        text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
+        return text.strip()
+
 
