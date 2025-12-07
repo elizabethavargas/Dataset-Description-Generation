@@ -48,6 +48,36 @@ search_template = """Dataset Overview:
     - context2
     - context3"""
 
+feedback_prompt_template = """
+You generated the following dataset description:
+
+{description}
+
+The initial input used to generate this description was:
+
+{instructions}
+
+Your task: Critique the generated description for the following requirements: {requirements}.
+- Point out missing information
+- Highlight mistakes or inconsistencies
+- Suggest what should be improved
+
+Provide concise feedback that the model can use to revise its output.
+"""
+
+revision_prompt_template = """
+You are now going to rewrite the dataset description.
+
+Original instructions / input:
+{instructions}
+
+Feedback from previous critique:
+{feedback}
+
+Using the original input and the feedback, rewrite the dataset description to fully satisfy the requirements.
+Provide only the updated dataset description in clear, natural sentences. Do not add extra commentary.
+"""
+
 
 def build_prompt(dataset_info, user_focused=True):
     dataset_sample = dataset_info.get("data_example")
@@ -129,30 +159,26 @@ class HFGenerator:
                 self.tokenizer.convert_tokens_to_ids("<|eot_id|>")
             ]
 
-    def generate_description(self, dataset_info, user_focused=True, temperature=0.0):
-        """Generates a description given a prompt and temperature"""
-        if user_focused:
-            system_message = """You are an assistant for a dataset search engine. Your goal
-    is to improve the readability of dataset descriptions for dataset search engine users."""
-        else:
-            system_message = """You are an assistant for a dataset search engine. Your goal is 
-            to improve the performance of the dataset search engine for keyword queries."""
+    def _run_generation(self, user_content, system_message, temperature=0.0):
+      """
+      Runs a single-pass generation.
+      - user_content: the main user prompt text
+      - system_message: the system role content
+      """
 
-        user_content = build_prompt(dataset_info, user_focused=user_focused)[:5000]
+      prompt = self.tokenizer.apply_chat_template(
+          [
+              {"role": "system", "content": system_message},
+              {"role": "user", "content": user_content},
+          ],
+          tokenize=False,
+          add_generation_prompt=True,
+      )
 
-        prompt = self.tokenizer.apply_chat_template(
-            [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_content},
-            ],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+      inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
+      do_sample = temperature > 0
 
-        inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
-        do_sample = temperature > 0
-
-        if "Llama" in self.model_name or "Meta-Llama" in self.model_name:
+      if "Llama" in self.model_name or "Meta-Llama" in self.model_name:
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -165,23 +191,73 @@ class HFGenerator:
                     use_cache=True,
                 )
 
-        else:  # Qwen branch
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=200,
-                    do_sample=do_sample,
-                    temperature=temperature,
-                    eos_token_id=self.eos_ids,
-                    pad_token_id=self.pad_id,
-                    bos_token_id=self.bos_id,
-                    use_cache=True,
-                )
-        #text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
-        #return text.strip() #[len(prompt):].strip()
+      else:  # Qwen branch
+          with torch.no_grad():
+              outputs = self.model.generate(
+                  **inputs,
+                  max_new_tokens=200,
+                  do_sample=do_sample,
+                  temperature=temperature,
+                  eos_token_id=self.eos_ids,
+                  pad_token_id=self.pad_id,
+                  bos_token_id=self.bos_id,
+                  use_cache=True,
+              )
 
-        gen_ids = outputs[0][inputs.input_ids.shape[-1]:]
-        text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
-        return text.strip()
+      gen_ids = outputs[0][inputs.input_ids.shape[-1]:]
+      text = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
+      return text.strip()
 
+    def _generate_fewshot(self, base_prompt, user_focused=True, temperature=0.0):
+      """
+      Performs 3-step self-correcting few-shot generation:
+      1. Initial generation
+      2. Critique
+      3. Revision
+      """
+      # Step 1 — initial output
+      if user_focused:
+            system_message = """You are an assistant for a dataset search engine. Your goal
+      is to improve the readability of dataset descriptions for dataset search engine users."""
+      else:
+          system_message = """You are an assistant for a dataset search engine. Your goal is 
+          to improve the performance of the dataset search engine for keyword queries."""
+      initial_output = self._run_generation(base_prompt, system_message=system_message, temperature=temperature)
+
+      # Step 2 — critique / feedback
+      req_text = "user-focused description" if user_focused else "search-focused description"
+      feedback_prompt = feedback_prompt_template.format(
+          description=initial_output,
+          instructions=base_prompt,
+          requirements=req_text
+      )
+      feedback = self._run_generation(feedback_prompt, system_message=system_message, temperature=0.0)
+
+      # Step 3 — rewrite using feedback
+      revision_prompt = revision_prompt_template.format(
+          instructions=base_prompt,
+          feedback=feedback
+      )
+      final_output = self._run_generation(revision_prompt, system_message=system_message, temperature=temperature)
+
+      return final_output
+
+
+    def generate_description(self, dataset_info, user_focused=True, few_shot=False, temperature=0.0):
+        """Generates a description given a prompt and temperature"""
+        if user_focused:
+            system_message = """You are an assistant for a dataset search engine. Your goal
+    is to improve the readability of dataset descriptions for dataset search engine users."""
+        else:
+            system_message = """You are an assistant for a dataset search engine. Your goal is 
+            to improve the performance of the dataset search engine for keyword queries."""
+
+        prompt = build_prompt(dataset_info, user_focused=user_focused)[:5000]
+
+        if few_shot:
+          # delegate to few-shot internal loop
+          return self._generate_fewshot(prompt, user_focused=user_focused, temperature=temperature)
+
+        # Single-pass generation
+        return self._run_generation(prompt, system_message=system_message, temperature=temperature)
 
