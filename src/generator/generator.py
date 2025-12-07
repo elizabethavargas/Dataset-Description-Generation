@@ -146,6 +146,7 @@ class HFGenerator:
                 {"role": "user", "content": user_content},
             ],
             tokenize=False,
+            add_generation_prompt=True,
         )
 
         inputs = self.tokenizer(prompt, return_tensors="pt").to("cuda")
