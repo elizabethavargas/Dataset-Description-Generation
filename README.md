@@ -38,4 +38,4 @@ print(description)
 
 ### Quick Jupyter Notebook Start
 
-For a much better introduction, we **highly recommend** starting with the quick_start notebook.
+For a more complete introduction, start with the [quick_start notebook](https://github.com/elizabethavargas/Dataset-Description-Generation/blob/main/quick_start.ipynb).
