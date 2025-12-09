@@ -321,7 +321,7 @@ class HFGenerator:
         """
         
         # 1. Build Prompt (Enable example only if using smart loop)
-        prompt = build_prompt(dataset_info, user_focused=user_focused, include_example=use_smart_loop)
+        prompt = build_prompt(dataset_info, user_focused=user_focused, include_example=use_smart_loop)[:10000]
 
         
         if use_smart_loop:
@@ -337,4 +337,4 @@ class HFGenerator:
         else:
             system_message = "You are an assistant for a dataset search engine. Your goal is to improve keyword search performance."
 
-        return self._run_generation(prompt, system_message=system_message, temperature=temperature)
+        return self._run_generation(prompt[:5000], system_message=system_message, temperature=temperature)
